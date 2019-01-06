@@ -83,4 +83,4 @@ adc <- map(our_games,4)
 support <- map(our_games,5)
 
 #Need to learn the scoped versions of dplyr functions to get through this
-map_df(hobbler, ~ {summarize_all(c(.),mean)})
+map_df(mid, ~ {summarize_all(c(.),mean)})
