@@ -45,7 +45,7 @@ names(scrims) = c("Date","match_id","lado")
 }
 #participants <- as.tbl(as.data.frame(map(scrims$lado,get_part_id))) ;names(participants) = paste("juego",1:length(participants))
 
-#Construyendo función para extraer info general de los matches
+#Construyendo funciÃ³n para extraer info general de los matches
 #incluye: position, currentgold, totalgold, level, xp, minionsKilled, jungleMinionsKilled
 extract_match_data <- function(match_id) {
   if (!is.na(match_id)) {
@@ -55,15 +55,15 @@ extract_match_data <- function(match_id) {
   }
 }
 
-#Aplicando la función de extracción de datos a los match de los scrims,
-#se retorna una lista con los n juegos extraídos
+#Aplicando la funciÃ³n de extracciÃ³n de datos a los match de los scrims,
+#se retorna una lista con los n juegos extraÃ­dos
 #all_games <- map(scrims$match_id, extract_match_data)
 
-#filtrando games en lado azul y añadiendo info general
+#filtrando games en lado azul y aÃ±adiendo info general
 blue_side <- scrims %>% filter(lado == "azul")
 blue_side_games <-  map(blue_side$match_id, extract_match_data) %>% 
   map(~ .[1:5])
-#filtrando games en lado rojo y añadiendo info general
+#filtrando games en lado rojo y aÃ±adiendo info general
 red_side <- scrims %>% filter(lado == "rojo")
 red_side_games <-  map(red_side$match_id, extract_match_data) %>% 
   map(~ .[6:10])
@@ -76,11 +76,11 @@ obtain_essentials <- function(games,x,y){
 }
 
 #These are the matches separated by player
-sander <- map(our_games,1)
-julaxe <- map(our_games,2)
-hobbler <- map(our_games,3)
-kindle <- map(our_games,4)
-suppa <- map(our_games,5)
+top <- map(our_games,1)
+jungler <- map(our_games,2)
+mid <- map(our_games,3)
+adc <- map(our_games,4)
+support <- map(our_games,5)
 
 #Need to learn the scoped versions of dplyr functions to get through this
 map_df(hobbler, ~ {summarize_all(c(.),mean)})
