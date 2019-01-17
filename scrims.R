@@ -2,16 +2,21 @@ library(googlesheets);library(tidyverse);library(lubridate);library(jsonlite)
 key <- readLines("API/API key.txt", warn=F)
 servers <- c("https://la1.api.riotgames.com","https://na1.api.riotgames.com");names(servers) =c("LAN","NA")
 by_match <- "/lol/match/v4/timelines/by-match/"
+
 #This line may ask to authenticate using a browser
 gs_ls()
+
 #get the match history
 mh <- gs_url("https://docs.google.com/spreadsheets/d/1WAXDVqF0Bm2QvADV76uPd78n03oLLl_NJVFVfItHKHE/")
+
 # get the raw match_history sheet
 training_history <- gs_read(ss=mh, ws = "match_history", range = "B4:BA9")
+
 #fixing for the lack of last character with an NA
 fix <- training_history[length(training_history)-1]
 names(fix) = paste0("X",as.integer(str_replace(names(fix),"X","")) + 2) 
 training_history <- cbind(training_history,fix)
+
 #Cleaning the links and dates
 historial <- training_history %>%
   gather(Date, link) %>%
@@ -23,6 +28,7 @@ lados <- training_history %>%
 colnames(lados) <- unique(historial$Date)
 lados <- lados %>% gather(Date, lado) %>% 
   mutate(Date = ymd(Date))
+
 #Joining the tables and cleaning up the link
 scrims <- as.tbl(cbind(historial, lados$lado), stringsAsFactors = FALSE) %>% 
   mutate(server = str_extract(link, "LA1|NA1")) %>%
@@ -35,6 +41,7 @@ names(scrims) = c("date","match_id","lado","server")
 
 #This function's purpose is to define the participant_ids based on the side data
 #The input is a string with the side, it must either be "azul" or "rojo"
+
 get_part_id <- function(x) {
   if (!is.na(x)){
   if (x == "azul") {
@@ -67,6 +74,7 @@ extract_match_data <- function(match_id, server) {
 blue_side <- scrims %>% filter(lado == "azul")
 blue_side_games <-  map2(.x = blue_side$match_id, .y = blue_side$server, .f = extract_match_data) %>% 
   map(~ .[1:5])
+
 #filtering games on the red side and adding general info
 red_side <- scrims %>% filter(lado == "rojo")
 red_side_games <-  map2(red_side$match_id, red_side$server, extract_match_data) %>% 
@@ -116,6 +124,7 @@ get_lane_cs <- function(games, player) {
 top_cs <- get_lane_cs(our_games, 1)
 mid_cs <- get_lane_cs(our_games, 3)
 adc_cs <- get_lane_cs(our_games, 4)
+
 #Building the data frame to use with ggplot2
 cs_10 <-  tibble(games = names(top_cs), Sander = map_dbl(top_cs, "min10"), Hobbler = map_dbl(mid_cs, "min10"), Kindle = map_dbl(adc_cs, "min10")) %>% 
   gather(player, cs, -games)
@@ -126,3 +135,6 @@ ggplot(cs_10, aes(cs, fill = player)) +
   scale_fill_brewer(palette = "Set2") + 
   ggtitle("Distribución de CS@10 en el periodo de scrims") +
   labs(x = "Creep Score", y = "Cantidad")
+
+#Saving the current games
+toJSON(our_games) %>% write("enero_basics.json")
