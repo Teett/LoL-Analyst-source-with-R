@@ -19,19 +19,23 @@ historial <- training_history %>%
   filter(!is.na(Date))
 #Extracting which side we played on
 lados <- training_history %>%
-  select(num_range("X",seq(2,length(lados), by = 2)))
+  select(num_range("X",seq(2,length(training_history), by = 2)))
 colnames(lados) <- unique(historial$Date)
 lados <- lados %>% gather(Date, lado) %>% 
   mutate(Date = ymd(Date))
 #Joining the tables and cleaning up the link
-scrims <- as.tbl(cbind(historial, lados$lado), stringsAsFactors = FALSE) %>%
-  mutate(link = str_replace(link, "https://matchhistory.lan.leagueoflegends.com/es/#match-details/LA1/", "")) %>% 
-  mutate(link = strtrim(link, 9)) %>% 
+scrims <- as.tbl(cbind(historial, lados$lado), stringsAsFactors = FALSE) %>% 
+  mutate(server = str_extract(link, "LA1|NA1")) %>%
+  mutate(link = str_replace(link, "https://matchhistory.lan.leagueoflegends.com/es/#match-details/LA1/", "")) %>%
+  mutate(link = str_replace(link, "https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/", "")) %>%
+  mutate(link = strtrim(link, 10)) %>%
+  mutate(link = str_remove(link, "/")) %>% 
   mutate(`lados$lado` = as.character(`lados$lado`))
-names(scrims) = c("Date","match_id","lado")
+names(scrims) = c("date","match_id","lado","server")
 
-#Filtering the participant_ids based on the side data
-#get_part_id <- function(x) {
+#This function's purpose is to define the participant_ids based on the side data
+#The input is a string with the side, it must either be "azul" or "rojo"
+get_part_id <- function(x) {
   if (!is.na(x)){
   if (x == "azul") {
     participants <- c(1:5)
@@ -45,42 +49,80 @@ names(scrims) = c("Date","match_id","lado")
 }
 #participants <- as.tbl(as.data.frame(map(scrims$lado,get_part_id))) ;names(participants) = paste("juego",1:length(participants))
 
-#Construyendo función para extraer info general de los matches
-#incluye: position, currentgold, totalgold, level, xp, minionsKilled, jungleMinionsKilled
-extract_match_data <- function(match_id) {
+#This function extracts the general info of the matches
+#includes: position, currentgold, totalgold, level, xp, minionsKilled, jungleMinionsKilled
+extract_match_data <- function(match_id, server) {
   if (!is.na(match_id)) {
-  fromJSON(paste0(servers[1],by_match,match_id,"?api_key=",key))[[1]][[1]]
+    if (server == "LA1") {
+      fromJSON(paste0(servers[1],by_match,match_id,"?api_key=",key))[[1]][[1]]
+    } else if (server == "NA1") {
+      fromJSON(paste0(servers[2],by_match,match_id,"?api_key=",key))[[1]][[1]]
+    }
   } else {
     NA
   }
 }
 
-#Aplicando la función de extracción de datos a los match de los scrims,
-#se retorna una lista con los n juegos extraídos
-#all_games <- map(scrims$match_id, extract_match_data)
-
-#filtrando games en lado azul y añadiendo info general
+#filtering games on the blue side and adding general info
 blue_side <- scrims %>% filter(lado == "azul")
-blue_side_games <-  map(blue_side$match_id, extract_match_data) %>% 
+blue_side_games <-  map2(.x = blue_side$match_id, .y = blue_side$server, .f = extract_match_data) %>% 
   map(~ .[1:5])
-#filtrando games en lado rojo y añadiendo info general
+#filtering games on the red side and adding general info
 red_side <- scrims %>% filter(lado == "rojo")
-red_side_games <-  map(red_side$match_id, extract_match_data) %>% 
+red_side_games <-  map2(red_side$match_id, red_side$server, extract_match_data) %>% 
   map(~ .[6:10])
 
 #mixing all the games regardless of the participant id, all these are our games
 our_games <- purrr::flatten(list(blue_side_games, red_side_games));names(our_games) <- paste("game",1:length(our_games))
+
+
+#Flattened the positions data frame inside each game
+for (i in seq_along(our_games)) {
+  our_games[[i]] <- our_games[[i]]  %>%  map(jsonlite::flatten)
+}
+
 #A function to get data from a certain game x and a certain player y = (1=top,2=jg,3=mid,4=adc,5=supp)
 obtain_essentials <- function(games,x,y){
   games[[x]][y]
 }
 
-#These are the matches separated by player
-top <- map(our_games,1)
-jungler <- map(our_games,2)
-mid <- map(our_games,3)
-adc <- map(our_games,4)
-support <- map(our_games,5)
+#This function selects only the useful information for the given player
+info_selector <- function(filtered_games, player_number) {
+  map(filtered_games,player_number) %>% 
+    map(~select(., -teamScore, -dominionScore))
+}
 
-#Need to learn the scoped versions of dplyr functions to get through this
-map_df(mid, ~ {summarize_all(c(.),mean)})
+#These are the matches separated by player with only the useful info selected
+top <- info_selector(our_games, 1)
+jungle <- info_selector(our_games, 2)
+mid <- info_selector(our_games, 3)
+adc <- info_selector(our_games, 4)
+support <- info_selector(our_games, 5)
+
+
+#Defining a function for the names, this function takes as input a vector of cs to return it's names based on the minute
+minute_key <- function(x) {
+  paste0("min",0:(length(x)-1))  
+}
+
+#A function to get the relevant lane cs for each player
+get_lane_cs <- function(games, player) {
+  games %>% map(~map(.x,"minionsKilled")) %>% 
+    map(player) %>% 
+    map(possibly(~data.frame(min5 = .x[[6]], min10 = .x[[11]], min15 = .x[[16]], min20 = .x[[21]], lastminute = last(.x)), otherwise = 
+                   data.frame(min5 = NA, min10 = NA, min15 = NA, min20 = NA, lastminute = NA)))
+}
+#Subsetting the cs for each player to study
+top_cs <- get_lane_cs(our_games, 1)
+mid_cs <- get_lane_cs(our_games, 3)
+adc_cs <- get_lane_cs(our_games, 4)
+#Building the data frame to use with ggplot2
+cs_10 <-  tibble(games = names(top_cs), Sander = map_dbl(top_cs, "min10"), Hobbler = map_dbl(mid_cs, "min10"), Kindle = map_dbl(adc_cs, "min10")) %>% 
+  gather(player, cs, -games)
+
+#cs quantity graph through all the scrims
+ggplot(cs_10, aes(cs, fill = player)) +
+  geom_bar(position = "stack", alpha = 1) +
+  scale_fill_brewer(palette = "Set2") + 
+  ggtitle("Distribuci�n de CS@10 en el periodo de scrims") +
+  labs(x = "Creep Score", y = "Cantidad")
