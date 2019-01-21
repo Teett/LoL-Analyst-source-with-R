@@ -1,0 +1,58 @@
+---
+title: "Reporte de Solo Queue de equipos de la liga"
+author: "Tet"
+date: "20 de enero de 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Obtención de los account_id v4
+
+Para obtener los account_id con base en el nombre de invocador utilizaremos un archivo `.csv` con los nombres de las cuentas de los equipos a analizar, posteriormente se realiza la llamada correspondiente al API especificada en el siguiente código:
+
+
+```{r, message = FALSE}
+library(jsonlite)
+library(readr)
+library(data.table)
+library(tidyverse)
+```
+
+```{r}
+#The API key in a text file
+key <- readLines("API/API key.txt", warn=F)
+servers <- read.table("API/servers.csv",sep=";",header=T,stringsAsFactors = F,na.strings = F)
+matchlist <- "/lol/match/v4/matchlists/by-account/"
+queue <- "?queue=420" #440 ranked flex games
+
+#This function outputs the account_ids for each name given on names.csv and ignores "NA"
+
+
+get_account_ids <- function(names, account_ids = data.frame(names$Nombre)) {
+  account_ids <- data.frame(names$Nombre)
+  for (i in 1:length(names$Nombre)) {
+    for (j in 2:length(colnames(names))) {
+      if (names[i,j]!="NA") {
+        temporary <- fromJSON(paste0(servers[j],"/lol/summoner/v4/summoners/by-name/",names[i,j],"?api_key=",key))
+        account_ids[i,j] <- temporary$accountId
+      } else {account_ids[i,j]="NA"}
+    }
+  }
+  names(account_ids)=c("Nombre","LAN1","LAN2","LAS1","LAS2","NA1","NA2")
+  return(account_ids)
+}
+#Para Wild Jaguars
+names_wj <- read.table("API/LVP/wild_jaguars.csv", sep = ";" , header=T, stringsAsFactors = F, na.strings = F)
+wj_account_ids <- get_account_ids(names = names_wj)
+wj_account_ids
+#Para Max Tigers
+names_max <- read.table("API/LVP/max_tigers.csv", sep = ";" , header=T, stringsAsFactors = F, na.strings = F)
+max_account_ids <- get_account_ids(names = names_max)
+max_account_ids
+```
+
