@@ -21,12 +21,13 @@ library(lubridate)
 library(jsonlite)
 
 key <- readLines("API/API key.txt", warn=F)
-servers <- c("https://la1.api.riotgames.com","https://na1.api.riotgames.com");names(servers) =c("LAN","NA")
+servers <- c("https://la1.api.riotgames.com","https://na1.api.riotgames.com")
+names(servers) =c("LAN","NA")
 by_match <- "/lol/match/v4/timelines/by-match/"
 mes <- "enero"
 ```
 
-```{r, warning = FALSE, echo = FALSE, results = 'hide'}
+```{r, warning = FALSE, results = 'hide'}
 #This line may ask to authenticate using a browser
 gs_ls()
 ```
@@ -58,8 +59,12 @@ lados <- lados %>% gather(Date, lado) %>%
 #Joining the tables and cleaning up the link
 scrims <- as.tbl(cbind(historial, lados$lado), stringsAsFactors = FALSE) %>% 
   mutate(server = str_extract(link, "LA1|NA1")) %>%
-  mutate(link = str_replace(link, "https://matchhistory.lan.leagueoflegends.com/es/#match-details/LA1/", "")) %>%
-  mutate(link = str_replace(link, "https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/", "")) %>%
+  mutate(link = 
+           str_replace(link, 
+                       "https://matchhistory.lan.leagueoflegends.com/es/#match-details/LA1/", "")) %>%
+  mutate(link = 
+           str_replace(link, 
+                       "https://matchhistory.na.leagueoflegends.com/en/#match-details/NA1/", "")) %>%
   mutate(link = strtrim(link, 10)) %>%
   mutate(link = str_remove(link, "/")) %>% 
   mutate(`lados$lado` = as.character(`lados$lado`))
@@ -90,7 +95,8 @@ red_side_games <-  map2(red_side$match_id, red_side$server, extract_match_data) 
   map(~ .[6:10])
 
 #mixing all the games regardless of the participant id, all these are our games
-our_games <- purrr::flatten(list(blue_side_games, red_side_games));names(our_games) <- paste("game",1:length(our_games))
+our_games <- purrr::flatten(list(blue_side_games, red_side_games))
+names(our_games) <- paste("game",1:length(our_games))
 
 
 #Flattened the positions data frame inside each game
@@ -115,8 +121,9 @@ support <- info_selector(our_games, 5)
 get_lane_cs <- function(games, player) {
   games %>% map(~map(.x,"minionsKilled")) %>% 
     map(player) %>% 
-    map(possibly(~data.frame(min5 = .x[[6]], min10 = .x[[11]], min15 = .x[[16]], min20 = .x[[21]], lastminute = last(.x)), otherwise = 
-                   data.frame(min5 = NA, min10 = NA, min15 = NA, min20 = NA, lastminute = NA)))
+    map(possibly(~data.frame(min5 = .x[[6]], min10 = .x[[11]], min15 = .x[[16]], 
+                             min20 = .x[[21]], lastminute = last(.x)), 
+                 otherwise = data.frame(min5 = NA, min10 = NA, min15 = NA, min20 = NA, lastminute = NA)))
 }
 #Subsetting the cs for each player to study
 top_cs <- get_lane_cs(our_games, 1)
@@ -124,7 +131,8 @@ mid_cs <- get_lane_cs(our_games, 3)
 adc_cs <- get_lane_cs(our_games, 4)
 
 #Building the data frame to use with ggplot2
-cs_10 <-  tibble(games = names(top_cs), Sander = map_dbl(top_cs, "min10"), Hobbler = map_dbl(mid_cs, "min10"), Kindle = map_dbl(adc_cs, "min10")) %>% 
+cs_10 <-  tibble(games = names(top_cs), Sander = map_dbl(top_cs, "min10"), 
+                 Hobbler = map_dbl(mid_cs, "min10"), Kindle = map_dbl(adc_cs, "min10")) %>% 
   gather(player, cs, -games)
 
 ```
@@ -147,5 +155,5 @@ ggplot(cs_10, aes(cs, fill = player)) +
 Utilizando el siguiente código se guarda el *timeline* en los scrims del mes `r mes` en formato `JSON`
 
 ```{r}
-toJSON(our_games) %>% write("enero_basics.json")
+toJSON(our_games) %>% write("enero_timeline.json")
 ```
